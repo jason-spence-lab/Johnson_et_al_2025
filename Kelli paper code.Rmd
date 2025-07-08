@@ -1,0 +1,1992 @@
+---
+title: "Kelli paper code"
+author: "Xiangning Dong"
+date: "2025-07-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(ggplot2)
+library(Seurat)
+library(SeuratDisk)
+library(Signac)
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+library(ggeasy)
+library(plotly)
+library(grDevices)
+library(CellChat)
+library(SCpubr)
+library(stringr)
+```
+
+
+# scRNAseq data
+
+## Figure 1A
+### Create the object
+```{r}
+your_mount_point <- "/Volumes/umms-spencejr/"
+sample_lists <- c("2182-3","2182-4","2182-5","2182-6","2250-1","2250-2","2511-2","2511-3","2598-24",
+                  "2598-25","2598-26","2598-28","2598-29","2598-31","2757-2","2856-1")
+sample_species <- "human"
+qc_max_mito <- ifelse(sample_species == "human", 10, 5)
+
+
+metadata_table <- as.data.frame(read_xls(paste(your_mount_point,
+                                '01_RNAseq_RAW_Data/single_cell_meta_data_table_excel.xls',
+                                sep = ''), col_names = FALSE))
+
+colnames(metadata_table)[1:12] <- c("sample_ID","sample_path","age","tissue","gel","media","sex",
+                                   "sampleName","dataset","EGF_treatment","NRG1_treatment","EREG_treatment")
+
+metadata_table <- as.data.frame(lapply(metadata_table, function(x) gsub(".*:", "", x)))
+
+sample_paths <- paste(your_mount_point,subset(metadata_table, sample_ID %in% sample_lists)[,2],sep='')
+
+seurat_source_list <- lapply(sample_paths, function(x) Seurat::Read10X_h5(filename = x, use.names = TRUE, unique.features = TRUE))
+
+
+names(seurat_source_list) <- sample_lists
+
+
+seurat_object_list <- lapply(seq_along(seurat_source_list),
+                            function(i) Seurat::CreateSeuratObject(counts = seurat_source_list[[i]],
+                                                                   project = names(seurat_source_list)[i]))
+rm(seurat_source_list)
+
+# create the final seurat object that contains all the samples
+final_seurat_object <- merge(seurat_object_list[[1]], 
+                            y = seurat_object_list[2:length(seurat_object_list)])
+
+final_seurat_object[["percent.mt"]] <- ifelse(sample_species == "human",
+                                                  PercentageFeatureSet(final_seurat_object, pattern = "^MT-"),
+                                                  PercentageFeatureSet(final_seurat_object, pattern = "^mt-"))
+
+
+
+iMSC_panel <- read_excel("~/iMSC Panel.xlsx",skip = 1, sheet = "Edited")
+
+available_genes <- c(iMSC_panel$Gene)[c(iMSC_panel$Gene) %in% rownames(final_seurat_object)]
+
+c(iMSC_panel$Gene)[!(c(iMSC_panel$Gene) %in% rownames(final_seurat_object))]
+
+sum(final_seurat_object[["RNA"]]@counts["WT1",])
+table(final_seurat_object[["RNA"]]@counts["WT1",])
+
+
+sum(final_seurat_object[["RNA"]]@counts["MUC2",])
+table(final_seurat_object[["RNA"]]@counts["MUC2",])
+
+kelli_table <- data.frame(gene = available_genes)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[available_genes,])/rowSums(!!final_seurat_object[["RNA"]]@counts[available_genes,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[available_genes,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[available_genes,]) - nonzero_cells_expression_range_matrix
+
+set1 <- str_to_upper(unlist(strsplit(c("RBP2, PDX1, SATB2, FABP2, ALPI, DLL1, TAS1R3, PROX1"),split = ", ")))
+set1[!(set1 %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = set1)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[set1,])/rowSums(!!final_seurat_object[["RNA"]]@counts[set1,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[set1,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[set1,]) - nonzero_cells_expression_range_matrix
+
+
+set2 <- str_to_upper(unlist(strsplit(c("Bmp2, BMP4, ednrb, foxf1, osr1, FOXL1, mpped2, actc1, fbxl22, gli2, grem1, hapln1, dll1, fabp7, pdgfrb, cox4i2, cd34, id2, dpt, nrp2, capn3, donson, fst"),split = ", ")))
+set2[!(set2 %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = set2)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[set2,])/rowSums(!!final_seurat_object[["RNA"]]@counts[set2,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[set2,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[set2,]) - nonzero_cells_expression_range_matrix
+
+
+BMP_Ligands <- str_to_upper(unlist(strsplit(c("BMP2, BMP3, BMP4, BMP5, BMP6, BMP7, BMP8A, BMP8B, GDF2, BMP10, GDF11, GDF7, GDF6, GDF5, BMP15, GDF1, GDF3, GDF9, GDF10, GDF11, INHA, INHBA, INHBB, INHBC, INHBE, MSTN, TGFB1, TGFB2, TGFB3"),split = ", ")))
+BMP_Ligands[!(BMP_Ligands %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = BMP_Ligands)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[BMP_Ligands,])/rowSums(!!final_seurat_object[["RNA"]]@counts[BMP_Ligands,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[BMP_Ligands,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[BMP_Ligands,]) - nonzero_cells_expression_range_matrix
+
+BMP_Receptors <- str_to_upper(unlist(strsplit(c("ACVRL1, ACVR1, BMPR1A, ACVR1B, TGFBR1, BMPR1B, ACVR1C, ACVR2A, ACVR2B, AMHR2, BMPR2, TGFBR2, TGFBR3"),split = ", ")))
+BMP_Receptors[!(BMP_Receptors %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = BMP_Receptors)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[BMP_Receptors,])/rowSums(!!final_seurat_object[["RNA"]]@counts[BMP_Receptors,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[BMP_Receptors,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[BMP_Receptors,]) - nonzero_cells_expression_range_matrix
+
+
+SMADs <- str_to_upper(unlist(strsplit(c("SMAD1, SMAD2, SMAD3, SMAD4, SMAD5, SMAD6, SMAD7, SMAD9"),split = ", ")))
+SMADs[!(SMADs %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = SMADs)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[SMADs,])/rowSums(!!final_seurat_object[["RNA"]]@counts[SMADs,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[SMADs,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[SMADs,]) - nonzero_cells_expression_range_matrix
+
+
+WNT_Receptors <- str_to_upper(unlist(strsplit(c("FZD1, FZD2, FZD3, FZD4, FZD5, FZD6, FZD7, FZD8, FZD9, FZD10"),split = ", ")))
+WNT_Receptors[!(WNT_Receptors %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = WNT_Receptors)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[WNT_Receptors,])/rowSums(!!final_seurat_object[["RNA"]]@counts[WNT_Receptors,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[WNT_Receptors,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[WNT_Receptors,]) - nonzero_cells_expression_range_matrix
+
+
+WNT_Ligands <- str_to_upper(unlist(strsplit(c("WNT1, WNT2, WNT2B, WNT3, WNT3A, WNT4, WNT5A, WNT5B, WNT6, WNT7A, WNT7B, WNT8A, WNT8B, WNT9A, WNT9B, WNT10A, WNT10B, WNT11, WNT16"),split = ", ")))
+WNT_Ligands[!(WNT_Ligands %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = WNT_Ligands)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[WNT_Ligands,])/rowSums(!!final_seurat_object[["RNA"]]@counts[WNT_Ligands,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[WNT_Ligands,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[WNT_Ligands,]) - nonzero_cells_expression_range_matrix
+
+
+
+WNT_Interacting <- str_to_upper(unlist(strsplit(c("NDP, RSPO1, RSPO2, RSPO3, RSPO4, SFRP1, SFRP2, FRZB, SFRP4, SFRP5, DKK1, WIF1, SOST, KREMEN1, KREMEN2, LRP5, LRP6, LGR4, LGR5, LGR6, SMO"),split = ", ")))
+WNT_Interacting[!(WNT_Interacting %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = WNT_Interacting)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[WNT_Interacting,])/rowSums(!!final_seurat_object[["RNA"]]@counts[WNT_Interacting,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[WNT_Interacting,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[WNT_Interacting,]) - nonzero_cells_expression_range_matrix
+
+
+set1_jun9 <- str_to_upper(unlist(strsplit(c("DCLK1, CD4, EPGN, NRG3, NRG4, NRG2, PTGS1"),split = ", ")))
+set1_jun9[!(set1_jun9 %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = set1_jun9)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[set1_jun9,])/rowSums(!!final_seurat_object[["RNA"]]@counts[set1_jun9,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[set1_jun9,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[set1_jun9,]) - nonzero_cells_expression_range_matrix
+
+
+immune_markers_jun9 <- str_to_upper(unlist(strsplit(c("CD4, CD8A, CD8B, CD3E, BCL6, CXCR5, IL2RA, FOXP3, ICOS, PDCD1, TNFRSF18, CCR4, CCR6, IL6R, IL12RB1, IL17A, IL23R, RORC, GATA3, STAT6, IRF4, TBX21, CCR10, GZMB, ITGAE, FCGR3A, NCAM1, KIT, IL7R, KLRG1, ICAM1, VCAM1, CD19, MS4A1, CD27, CD79A, CD1D, CD19, CD5, CR2, CD38, ITGAX, CD28, CD44, THY1, CTLA4, HLA-A, HLA-DRB1, CX3CR1, CD163, CD68, IL10, ITGAM, ITGAL, CCR3, SIGLEC8, ITGB2, IL12A, IL23A, CD14, SELL, CD69"),split = ", ")))
+immune_markers_jun9[!(immune_markers_jun9 %in% rownames(final_seurat_object))]
+
+kelli_table <- data.frame(gene = immune_markers_jun9)
+kelli_table$nonzero_cells_average_expression <- rowSums(final_seurat_object[["RNA"]]@counts[immune_markers_jun9,])/rowSums(!!final_seurat_object[["RNA"]]@counts[immune_markers_jun9,])
+
+
+nonzero_cells_expression_range_matrix <- apply(final_seurat_object[["RNA"]]@counts[immune_markers_jun9,], 1, FUN = function(x) {min(x[x > 0])})
+
+nonzero_cells_expression_range_matrix <- replace(nonzero_cells_expression_range_matrix, nonzero_cells_expression_range_matrix == Inf, 0)
+
+
+kelli_table$nonzero_cells_expression_range <- rowMaxs(final_seurat_object[["RNA"]]@counts[immune_markers_jun9,]) - nonzero_cells_expression_range_matrix
+
+immune_markers_jun9 <- str_to_upper(unlist(strsplit(c("CD24A, TRAC, TRB, TRNAC1, TRD"),split = ", ")))
+immune_markers_jun9[!(immune_markers_jun9 %in% rownames(final_seurat_object))]
+
+qc_min_genes <- 500
+qc_min_counts <- 500
+qc_max_genes <- 8000
+qc_max_counts <- 60000
+
+
+
+final_seurat_object <- subset(final_seurat_object, subset = nFeature_RNA >= qc_min_genes &
+                                nFeature_RNA <= qc_max_genes & percent.mt <= qc_max_mito &
+                                nCount_RNA >= qc_min_counts & nCount_RNA <= qc_max_counts)
+
+set.seed(888)
+DefaultAssay(final_seurat_object) <- "RNA"
+final_seurat_object <- NormalizeData(final_seurat_object,
+                                            normalization.method = "LogNormalize", scale.factor =10000)
+final_seurat_object <-  FindVariableFeatures(final_seurat_object)
+final_seurat_object <- RunFastMNN(object.list = SplitObject(final_seurat_object, split.by = "orig.ident"))
+final_seurat_object <- RunUMAP(final_seurat_object, dims = 1:30,reduction = "mnn")
+final_seurat_object <- FindNeighbors(final_seurat_object, dims = 1:30,reduction = "mnn")
+final_seurat_object <- FindClusters(final_seurat_object, resolution = 0.3, algorithm = 1)
+
+```
+
+### Add age info
+```{r}
+final_seurat_object$age.group <- case_when(
+  final_seurat_object$orig.ident %in% c("2182-3", "2598-31", "2757-2", "2182-4", "2856-1") ~ "D47-75",
+  final_seurat_object$orig.ident %in% c("2598-24", "2598-25", "2598-26") ~ "D80",
+  final_seurat_object$orig.ident %in% c("2511-2", "2511-3") ~ "D101",
+  final_seurat_object$orig.ident %in% c("2182-5", "2182-6", "2250-1", "2250-2", "2598-28", "2598-29") ~ "D110-135"
+  )
+
+final_seurat_object$cluster_label <- case_when(
+  final_seurat_object@active.ident == 0 ~ "mesenchyme_1",
+  final_seurat_object@active.ident == 1 ~ "mesenchyme_2",
+  final_seurat_object@active.ident == 2 ~ "mesenchyme_3",
+  final_seurat_object@active.ident == 3 ~ "mesenchyme_4",
+  final_seurat_object@active.ident == 4 ~ "immune_1",
+  final_seurat_object@active.ident == 5 ~ "epithelium_1",
+  final_seurat_object@active.ident == 6 ~ "epithelium_2",
+  final_seurat_object@active.ident == 7 ~ "immune_2",
+  final_seurat_object@active.ident == 8 ~ "mesenchyme_5",
+  final_seurat_object@active.ident == 9 ~ "ENS_1",
+  final_seurat_object@active.ident == 10 ~ "endothelium",
+  final_seurat_object@active.ident == 11 ~ "ENS_2",
+  final_seurat_object@active.ident == 12 ~ "immune_3",
+  final_seurat_object@active.ident == 13 ~ "mesothelium",
+  final_seurat_object@active.ident == 14 ~ "immune_4",
+  final_seurat_object@active.ident == 15 ~ "pericyte",
+  final_seurat_object@active.ident == 16 ~ "SMC",
+  final_seurat_object@active.ident == 17 ~ "epithelium_3",
+  final_seurat_object@active.ident == 18 ~ "RBCs"
+)
+
+final_seurat_object$annotation_lvl1 <- case_when(
+  final_seurat_object$cluster_label %in% c("endothelium_1") ~ "Endothelium",
+  final_seurat_object$cluster_label %in% c("ENS_1", "ENS_2") ~ "ENS",
+  final_seurat_object$cluster_label %in% c("epithelium_1", "epithelium_2", "epithelium_3", "mesothelium") ~ "Epithelium",
+  final_seurat_object$cluster_label %in% c("immune_1", "immune_2", "immune_3", "immune_4") ~ "Immune",
+  final_seurat_object$cluster_label %in% c("mesenchyme_1", "mesenchyme_2", "mesenchyme_3", "mesenchyme_4", "mesenchyme_5") ~ "Fibroblast",
+  final_seurat_object$cluster_label %in% c("pericyte", "SMC") ~ "SMC",
+  final_seurat_object$cluster_label %in% c("RBCs") ~ "MM"
+)
+```
+
+## Figure 2A & 2C
+### Mesenchyme extracted from full object
+```{r}
+final_seurat_object_mes <- subset(x = final_seurat_object, idents = c(0,1,2,3,8,15,16))
+
+set.seed(888)
+final_seurat_object_mes <- SCTransform(final_seurat_object_mes, vars.to.regress = "percent.mt", verbose = FALSE,
+                                      assay = "RNA")
+final_seurat_object_mes <- RunPCA(final_seurat_object_mes, verbose = FALSE)
+final_seurat_object_mes <- RunUMAP(final_seurat_object_mes, dims = 1:30)
+final_seurat_object_mes <- FindNeighbors(final_seurat_object_mes, dims = 1:30)
+final_seurat_object_mes <- FindClusters(final_seurat_object_mes, resolution = 0.5, algorithm = 1)
+DefaultAssay(final_seurat_object_mes) <- "RNA"
+final_seurat_object_mes <- NormalizeData(final_seurat_object_mes,
+                                            normalization.method = "LogNormalize", scale.factor =10000)
+```
+
+### QC1
+```{r}
+mesn_extraction <- subset(final_seurat_object_mes, idents = setdiff(final_seurat_object_mes@active.ident, c(3, 16, 17, 4, 9, 10, 11, 13, 14)))
+
+DefaultAssay(mesn_extraction) <- "RNA"
+mesn_extraction <- SCTransform(mesn_extraction, vars.to.regress = "percent.mt", verbose = FALSE, assay = "RNA")
+mesn_extraction <- FindVariableFeatures(mesn_extraction)
+mesn_extraction <- ScaleData(mesn_extraction)
+mesn_extraction <- RunPCA(mesn_extraction, verbose = FALSE)
+mesn_extraction <- RunUMAP(mesn_extraction, dims = 1:30)
+mesn_extraction <- FindNeighbors(mesn_extraction, dims = 1:30)
+mesn_extraction <- FindClusters(mesn_extraction, resolution = 0.4, algorithm = 4)
+DefaultAssay(mesn_extraction) <- "RNA"
+mesn_extraction <- NormalizeData(mesn_extraction, normalization.method = "LogNormalize", scale.factor =10000)
+
+mesn_extraction$age_group <- case_when(
+  mesn_extraction$orig.ident %in% c("2182-3", "2598-31", "2757-2", "2182-4", "2856-1") ~ "D47-75",
+  mesn_extraction$orig.ident %in% c("2598-24", "2598-25", "2598-26") ~ "D80",
+  mesn_extraction$orig.ident %in% c("2511-2", "2511-3") ~ "D101",
+  mesn_extraction$orig.ident %in% c("2182-5", "2182-6", "2250-1", "2250-2", "2598-28", "2598-29") ~ "D110-135")
+
+mesn_extraction$region <- case_when(
+  mesn_extraction$orig.ident %in% c("2598-31", "2757-2") ~ "Small Intestine",
+  mesn_extraction$orig.ident %in% c("2182-3", "2182-4", "2182-5", "2182-6", "2250-1", "2250-2", "2511-2", "2598-24", "2598-28", "2856-1") ~ "Duodenum",
+  mesn_extraction$orig.ident %in% c("2598-26") ~ "Jejunum",
+  mesn_extraction$orig.ident %in% c("2511-3", "2598-25", "2598-29") ~ "Ileum")
+```
+
+### QC2
+```{r}
+mesn_extraction_sub <- subset(mesn_extraction, idents = setdiff(levels(mesn_extraction@active.ident), c(12, 13, 19, 20)))
+
+DefaultAssay(mesn_extraction_sub) <- "SCT"
+mesn_extraction_sub <- FindVariableFeatures(mesn_extraction_sub)
+mesn_extraction_sub <- ScaleData(mesn_extraction_sub)
+mesn_extraction_sub <- RunPCA(mesn_extraction_sub, verbose = FALSE)
+mesn_extraction_sub <- RunUMAP(mesn_extraction_sub, dims = 1:30, reduction = "pca")
+mesn_extraction_sub <- FindNeighbors(mesn_extraction_sub, dims = 1:30)
+mesn_extraction_sub <- FindClusters(mesn_extraction_sub, resolution = 0.6, algorithm = 4)
+```
+
+### QC3 (final version)
+```{r}
+subset_recluster <- function(seurat_object, exclude_clusters, reso){
+  seurat_object_sub <- subset(seurat_object, idents = setdiff(unique(seurat_object@active.ident), exclude_clusters))
+
+  DefaultAssay(seurat_object_sub) <- "RNA"
+  seurat_object_sub <- SCTransform(seurat_object_sub)
+  # seurat_object_sub <- FindVariableFeatures(seurat_object_sub)
+  # seurat_object_sub <- ScaleData(seurat_object_sub)
+  # seurat_object_sub <- RunPCA(seurat_object_sub, verbose = FALSE)
+  seurat_object_sub <- RunUMAP(seurat_object_sub, dims = 1:30)
+  seurat_object_sub <- FindNeighbors(seurat_object_sub, dims = 1:30)
+  seurat_object_sub <- FindClusters(seurat_object_sub, resolution = reso, algorithm = 2)
+  
+  return(seurat_object_sub)
+}
+
+fetal_mesn_sub <- subset_recluster(fetal_mesn, c("11", "20"), 0.8)
+
+fetal_mesn_sub$annotation <- case_when(
+  fetal_mesn_sub@active.ident %in% c(8, 9, 10, 11) ~ "SEC",
+  fetal_mesn_sub@active.ident %in% c(5, 17) ~ "early LPF",
+  fetal_mesn_sub@active.ident %in% c(7) ~ "LPF",
+  fetal_mesn_sub@active.ident %in% c(6, 14, 15, 16) ~ "late LPF",
+  fetal_mesn_sub@active.ident %in% c(0, 1, 2, 3, 4, 12, 18) ~ "SMF",
+  fetal_mesn_sub@active.ident %in% c(13) ~ "CXCL13+ Fibroblast"
+)
+
+fetal_mesn_sub$annotation <- factor(fetal_mesn_sub$annotation, levels = c("SEC", "early LPF", "LPF", "late LPF", "SMF", "CXCL13+ Fibroblast"))
+```
+
+# Fetal Xenium data
+
+## Figure 1C
+### Functions
+
+#### Read in data
+```{r}
+load_xenium_data <- function(path, cell_ID_path, reso, file_name){
+  cell_stats <- read.csv(cell_ID_path)
+  cell_ID <- cell_stats$Cell.ID
+  
+  set.seed(888)
+  
+  xenium_object <- LoadXenium(path, fov = "fov")
+  
+  xenium_object_smint <- subset(xenium_object, subset = nCount_Xenium > 0, cells = cell_ID) 
+  
+  xenium_object_smint <- SCTransform(xenium_object_smint, assay = "Xenium")
+  xenium_object_smint <- RunPCA(xenium_object_smint, npcs = 30, features = rownames(xenium_object_smint))
+  xenium_object_smint <- RunUMAP(xenium_object_smint, dims = 1:30)
+  xenium_object_smint <- FindNeighbors(xenium_object_smint, reduction = "pca", dims = 1:30)
+  xenium_object_smint <- FindClusters(xenium_object_smint, resolution = reso)
+  
+  pdf(paste0("Xenium_umap/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object_smint, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object_smint)
+  }
+```
+
+### Apply functions
+
+#### D54
+```{r}
+path_D54 <- "～/d54_output-XETG00077__0022397__10692-KJ-2_ROI_A__20240503__171131"
+cell_D54 <- "～/Xenium_small intestine coodrinates/d54_smint_cell stats.csv"
+
+xenium_smint_D54 <- load_xenium_data(path_D54, cell_D54, 0.3, "Day_54_umap")
+```
+
+#### D57
+```{r}
+path_D57 <- "～/d57_output-XETG00077__0004335__9719-KJ-1_ROI_B__20240105__165644"
+cell_D57 <- "～/Xenium_small intestine coodrinates/d57_smint_cell stats.csv"
+
+xenium_smint_D57 <- load_xenium_data(path_D57, cell_D57, 0.3, "Day_57_umap")
+```
+
+#### D80
+```{r}
+path_D80 <- "～/d80_output-XETG00077__0004335__9719-KJ-1_ROI_C__20240105__165644"
+cell_D80 <- "～/Xenium_small intestine coodrinates/d80_smint_cells_stats.csv"
+
+xenium_smint_D80 <- load_xenium_data(path_D80, cell_D80, 0.3, "Day_80_umap")
+```
+
+#### D105
+```{r}
+path_D105 <- "～/d105_output-XETG00077__0022397__10692-KJ-2_ROI_D__20240503__171131"
+cell_D105 <- "～/Xenium_small intestine coodrinates/d105_smint_cells_stats.csv"
+
+xenium_smint_D105 <- load_xenium_data(path_D105, cell_D105, 0.3, "Day_105_umap")
+```
+
+#### D122
+```{r}
+path_D122 <- "～/d122_output-XETG00077__0022397__10692-KJ-2_ROI_B__20240503__171131"
+cell_D122 <- "～/Xenium_small intestine coodrinates/d122_smint_cells_stats.csv"
+
+xenium_smint_D122 <- load_xenium_data(path_D122, cell_D122, 0.3, "Day_122_umap")
+```
+
+#### D136
+```{r}
+path_D136 <- "～/d136_output-XETG00077__0022397__10692-KJ-2_ROI_C__20240503__171131"
+cell_D136 <- "～/Xenium_small intestine coodrinates/d136_smint_cells_stats.csv"
+
+xenium_smint_D136 <- load_xenium_data(path_D136, cell_D136, 0.3, "Day_136_umap")
+```
+
+#### D142
+```{r}
+path_D142 <- "～/d142_output-XETG00077__0004335__9719-KJ-1_ROI_A__20240105__165644"
+cell_D142 <- "～/Xenium_small intestine coodrinates/d142_smint_cells_stats.csv"
+
+xenium_smint_D142 <- load_xenium_data(path_D142, cell_D142, 0.3, "Day_142_umap")
+```
+
+
+
+
+
+
+
+### Merge objects
+```{r}
+xenium_smint_D54$age <- "D54"
+xenium_smint_D57$age <- "D57"
+xenium_smint_D80$age <- "D80"
+xenium_smint_D105$age <- "D105"
+xenium_smint_D122$age <- "D122"
+xenium_smint_D136$age <- "D136"
+xenium_smint_D142$age <- "D142"
+```
+
+```{r}
+xenium_total <- merge(
+  x = xenium_smint_D54,
+  y = list(xenium_smint_D57, xenium_smint_D80, xenium_smint_D105, xenium_smint_D122, xenium_smint_D136, xenium_smint_D142),
+  add.cell.ids = c("D54", "D57", "D80", "D105", "D122", "D136", "D142")
+)
+```
+
+```{r}
+xenium_total <- RunPCA(xenium_total, npcs = 30, features = rownames(xenium_total))
+xenium_total <- RunUMAP(xenium_total, dims = 1:30)
+xenium_total <- FindNeighbors(xenium_total, reduction = "pca", dims = 1:30)
+xenium_total <- FindClusters(xenium_total, resolution = 0.8)
+```
+
+```{r}
+xenium_total$age_group <- case_when(
+  xenium_total$age %in% c("D54", "D57") ~ "D47-75",
+  xenium_total$age %in% c("D80") ~ "D80",
+  xenium_total$age %in% c("D105") ~ "D105",
+  xenium_total$age %in% c("D122", "D136", "D142") ~ "D110-142",
+)
+
+xenium_total$age_group <- factor(xenium_total$age_group, levels = c("D47-75", "D80", "D105", "D110-142"))
+
+```
+
+### Randomly sampling for plots
+```{r}
+cell_ID_by_age <- data.frame(
+  cell_ID = names(xenium_total$age_group),
+  age_group = xenium_total$age_group
+)
+
+df_list <- split(cell_ID_by_age, cell_ID_by_age$age_group)
+
+set.seed(2024)
+T3_cell_IDs <- sample(df_list$D105$cell_ID, 20000, replace = FALSE)
+T4_cell_IDs <- sample(df_list$`D110-142`$cell_ID, 20000, replace = FALSE)
+
+df_list$D105 <- df_list$D105[df_list$D105$cell_ID%in%T3_cell_IDs, ]
+df_list$`D110-142` <- df_list$`D110-142`[df_list$`D110-142`$cell_ID%in%T4_cell_IDs, ]
+
+```
+
+```{r}
+xenium_total_down_sampling <- subset(xenium_total, cells = c(df_list$`D47-75`$cell_ID, df_list$D80$cell_ID, df_list$D105$cell_ID, df_list$`D110-142`$cell_ID))
+```
+
+```{r}
+xenium_total_down_sampling <- RunPCA(xenium_total_down_sampling, npcs = 30, features = rownames(xenium_total_down_sampling))
+xenium_total_down_sampling <- RunUMAP(xenium_total_down_sampling, dims = 1:30)
+xenium_total_down_sampling <- FindNeighbors(xenium_total_down_sampling, reduction = "pca", dims = 1:30)
+xenium_total_down_sampling <- FindClusters(xenium_total_down_sampling, resolution = 0.8)
+```
+
+```{r}
+xenium_total_down_sampling$annotation_lvl1 <- case_when(
+  xenium_total_down_sampling@active.ident %in% c(5, 17) ~ "Endothelium",
+  xenium_total_down_sampling@active.ident %in% c(9) ~ "ENS",
+  xenium_total_down_sampling@active.ident %in% c(1, 3, 4, 13, 14, 16, 21, 22) ~ "Epithelium",
+  xenium_total_down_sampling@active.ident %in% c(11, 18) ~ "Immune",
+  xenium_total_down_sampling@active.ident %in% c(0, 2, 7, 8, 12, 15, 20) ~ "Fibroblast",
+  xenium_total_down_sampling@active.ident %in% c(6, 10, 19) ~ "SMC"
+)
+```
+
+## Figure 2B & 2D
+
+### Extract mesenchyme from whole objects
+```{r}
+mesn_extraction <- function(object, mesn_cluster_number, reso, file_name){
+  mesn_sub <- subset(object, idents = mesn_cluster_number)
+  
+  set.seed(888)
+  
+  mesn_sub <- SCTransform(mesn_sub, assay = "Xenium")
+  mesn_sub <- RunPCA(mesn_sub, npcs = 30, features = rownames(mesn_sub))
+  mesn_sub <- RunUMAP(mesn_sub, dims = 1:30)
+  mesn_sub <- FindNeighbors(mesn_sub, reduction = "pca", dims = 1:30)
+  mesn_sub <- FindClusters(mesn_sub, resolution = reso)
+  
+  pdf(paste0("Mesn_extraction/umaps/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(mesn_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(mesn_sub)
+}
+```
+
+```{r}
+xenium_mesn_D54 <- mesn_extraction(xenium_smint_D54, c(0, 2), 0.3, "D54")
+xenium_mesn_D57 <- mesn_extraction(xenium_smint_D57, c(0, 2), 0.3, "D57")
+xenium_mesn_D80 <- mesn_extraction(xenium_smint_D80, c(0, 4), 0.3, "D80")
+xenium_mesn_D105 <- mesn_extraction(xenium_smint_D105, c(0, 2, 12), 0.3, "D105")
+xenium_mesn_D122 <- mesn_extraction(xenium_smint_D122, c(1, 2, 6), 0.3, "D122")
+xenium_mesn_D136 <- mesn_extraction(xenium_smint_D136, c(1, 2, 5), 0.3, "D136")
+xenium_mesn_D142 <- mesn_extraction(xenium_smint_D142, c(1, 2, 6, 10, 12, 14, 15), 0.3, "D142")
+```
+
+### Clean mesn
+```{r}
+mesn_extraction_sub <- function(object, non_mesn_cluster_number, reso, file_name){
+  mesn_number <- setdiff(levels(Idents(object)), non_mesn_cluster_number)
+  
+  mesn_sub <- subset(object, idents = mesn_number)
+  
+  set.seed(888)
+  
+  mesn_sub <- SCTransform(mesn_sub, assay = "Xenium")
+  mesn_sub <- RunPCA(mesn_sub, npcs = 30, features = rownames(mesn_sub))
+  mesn_sub <- RunUMAP(mesn_sub, dims = 1:30)
+  mesn_sub <- FindNeighbors(mesn_sub, reduction = "pca", dims = 1:30)
+  mesn_sub <- FindClusters(mesn_sub, resolution = reso)
+  
+  pdf(paste0("Mesn_extraction_new/umaps/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(mesn_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(mesn_sub)
+}
+```
+
+```{r}
+xenium_mesn_D57_new <- mesn_extraction_sub(xenium_mesn_D57, c(5), 0.3, "D57")
+xenium_mesn_D80_new <- mesn_extraction_sub(xenium_mesn_D80, c(4, 5), 0.3, "D80")
+xenium_mesn_D105_new <- mesn_extraction_sub(xenium_mesn_D105, c(5, 6, 7), 0.3, "D105")
+xenium_mesn_D122_new <- mesn_extraction_sub(xenium_mesn_D122, c(5, 6), 0.3, "D122")
+xenium_mesn_D136_new <- mesn_extraction_sub(xenium_mesn_D136, c(4, 5, 6, 7), 0.3, "D136")
+xenium_mesn_D142_new <- mesn_extraction_sub(xenium_mesn_D142, c(4, 5, 6, 7, 8), 0.3, "D142")
+```
+
+### Further QC
+```{r}
+xenium_mesn_D105_v2 <- subset(xenium_mesn_D105_new, subset = CDH1 == 0)
+xenium_mesn_D105_v2 <- mesn_extraction_sub(xenium_mesn_D105_v2, NA, 0.3, "D105_new")
+```
+
+```{r}
+xenium_mesn_D122_v2 <- mesn_extraction_sub(xenium_mesn_D122_new, c(5), 0.3, "D122_new")
+xenium_mesn_D136_v2 <- mesn_extraction_sub(xenium_mesn_D136_new, c(5, 6), 0.3, "D136_new")
+xenium_mesn_D142_v2 <- mesn_extraction_sub(xenium_mesn_D142_new, c(4), 0.3, "D142_new")
+```
+
+### Merge objects
+```{r}
+xenium_mesn_D54$age <- "D54"
+xenium_mesn_D57_new$age <- "D57"
+xenium_mesn_D80_new$age <- "D80"
+xenium_mesn_D105_v2$age <- "D105"
+xenium_mesn_D122_v2$age <- "D122"
+xenium_mesn_D136_v2$age <- "D136"
+xenium_mesn_D142_v2$age <- "D142"
+```
+
+```{r}
+xenium_total_mesn <- merge(
+  x = xenium_mesn_D54,
+  y = list(xenium_mesn_D57_new, xenium_mesn_D80_new, xenium_mesn_D105_v2, xenium_mesn_D122_v2, xenium_mesn_D136_v2, xenium_mesn_D142_v2),
+  add.cell.ids = c("D54", "D57", "D80", "D105", "D122", "D136", "D142")
+)
+```
+
+```{r}
+xenium_total_mesn <- RunPCA(xenium_total_mesn, npcs = 30, features = rownames(xenium_total_mesn))
+xenium_total_mesn <- RunUMAP(xenium_total_mesn, dims = 1:30)
+xenium_total_mesn <- FindNeighbors(xenium_total_mesn, reduction = "pca", dims = 1:30)
+xenium_total_mesn <- FindClusters(xenium_total_mesn, resolution = 0.8)
+```
+
+```{r}
+xenium_total_mesn$age_group <- case_when(
+  xenium_total_mesn$age %in% c("D54", "D57") ~ "D47-75",
+  xenium_total_mesn$age %in% c("D80") ~ "D80",
+  xenium_total_mesn$age %in% c("D105") ~ "D105",
+  xenium_total_mesn$age %in% c("D122", "D136", "D142") ~ "D110-142",
+)
+
+xenium_total_mesn$age_group <- factor(xenium_total_mesn$age_group, levels = c("D47-75", "D80", "D105", "D110-142"))
+```
+
+### Down sampling for plots
+```{r}
+cell_ID_by_age <- data.frame(
+  cell_ID = names(xenium_total_mesn$age_group),
+  age_group = xenium_total_mesn$age_group
+)
+
+df_list <- split(cell_ID_by_age, cell_ID_by_age$age_group)
+
+set.seed(2024)
+T3_cell_IDs <- sample(df_list$D105$cell_ID, 7000, replace = FALSE)
+T4_cell_IDs <- sample(df_list$`D110-142`$cell_ID, 7000, replace = FALSE)
+
+df_list$D105 <- df_list$D105[df_list$D105$cell_ID%in%T3_cell_IDs, ]
+df_list$`D110-142` <- df_list$`D110-142`[df_list$`D110-142`$cell_ID%in%T4_cell_IDs, ]
+
+```
+
+```{r}
+xenium_total_mesn_down_sampling <- subset(xenium_total_mesn, cells = c(df_list$`D47-75`$cell_ID, df_list$D80$cell_ID, df_list$D105$cell_ID, df_list$`D110-142`$cell_ID))
+```
+
+```{r}
+xenium_total_mesn_down_sampling <- RunPCA(xenium_total_mesn_down_sampling, npcs = 30, features = rownames(xenium_total_mesn_down_sampling))
+xenium_total_mesn_down_sampling <- RunUMAP(xenium_total_mesn_down_sampling, dims = 1:30)
+xenium_total_mesn_down_sampling <- FindNeighbors(xenium_total_mesn_down_sampling, reduction = "pca", dims = 1:30)
+xenium_total_mesn_down_sampling <- FindClusters(xenium_total_mesn_down_sampling, resolution = 0.8)
+```
+
+### Further clean up
+```{r}
+subset_recluster <- function(xenium_object, exclude_clusters, reso){
+  xenium_object_sub <- subset(xenium_object, idents = setdiff(unique(xenium_object@active.ident), exclude_clusters))
+
+  DefaultAssay(xenium_object_sub) <- "Xenium"
+  xenium_object_sub <- SCTransform(xenium_object_sub, assay = "Xenium")
+
+  xenium_object_sub <- RunPCA(xenium_object_sub, verbose = FALSE)
+  xenium_object_sub <- RunUMAP(xenium_object_sub, dims = 1:30)
+  xenium_object_sub <- FindNeighbors(xenium_object_sub, dims = 1:30)
+  xenium_object_sub <- FindClusters(xenium_object_sub, resolution = reso)
+  
+  return(xenium_object_sub)
+  }
+```
+
+```{r}
+xenium_total_mesn_down_sampling_sub <- subset_recluster(xenium_total_mesn_down_sampling, "4", 0.8)
+
+xenium_total_mesn_down_sampling_sub <- FindClusters(xenium_total_mesn_down_sampling_sub, resolution = 1.0, algorithm = 2)
+
+xenium_total_mesn_down_sampling_sub$annotation <- case_when(
+  xenium_total_mesn_down_sampling_sub@active.ident %in% c(3, 4, 13) ~ "SEC",
+  xenium_total_mesn_down_sampling_sub@active.ident %in% c(2) ~ "early LPF",
+  xenium_total_mesn_down_sampling_sub@active.ident %in% c(8) ~ "LPF",
+  xenium_total_mesn_down_sampling_sub@active.ident %in% c(7, 12) ~ "late LPF",
+  xenium_total_mesn_down_sampling_sub@active.ident %in% c(0, 1, 5, 6, 9, 10, 11, 15) ~ "SMF",
+  xenium_total_mesn_down_sampling_sub@active.ident %in% c(14) ~ "CXCL13+ Fibroblast"
+)
+
+xenium_total_mesn_down_sampling_sub$annotation <- factor(xenium_total_mesn_down_sampling_sub$annotation, levels = c("SEC", "early LPF", "LPF", "late LPF", "SMF", "CXCL13+ Fibroblast"))
+```
+
+# tHIO Xenium data
+
+## Figure 4A & 4B
+### Functions
+
+#### Read in data
+```{r}
+load_xenium_data <- function(path, reso, file_name){
+
+  set.seed(888)
+  
+  xenium_object <- LoadXenium(path, fov = "fov")
+  
+  xenium_object_sub <- subset(xenium_object, subset = nCount_Xenium > 0) 
+  
+  xenium_object_sub <- SCTransform(xenium_object_sub, assay = "Xenium")
+  xenium_object_sub <- RunPCA(xenium_object_sub, npcs = 30, features = rownames(xenium_object_sub))
+  xenium_object_sub <- RunUMAP(xenium_object_sub, dims = 1:30)
+  xenium_object_sub <- FindNeighbors(xenium_object_sub, reduction = "pca", dims = 1:30)
+  xenium_object_sub <- FindClusters(xenium_object_sub, resolution = reso)
+  
+  pdf(paste0("umaps/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object_sub)
+  }
+```
+
+### Apply functions
+
+#### tHIO-EGF
+```{r}
+path_EGF <- "~/20240503__171053__10692-KJ/EGF-100_output-XETG00077__0022396__10692-KJ-1_ROI_B__20240503__171131"
+
+xenium_tHIO_EGF <- load_xenium_data(path_EGF, 0.4, "EGF_umap")
+```
+
+```{r}
+exclude_cell_path_1 <- c("~/tHIO cell stats and maps/EGF/Kidney_01_cells_stats.csv", "~/tHIO cell stats and maps/EGF/Kidney_02_cells_stats.csv")
+
+for (i in 1:length(exclude_cell_path_1)) assign(paste0("EGF_cells_to_be_excluded_", i), read.csv(exclude_cell_path_1[i]))
+```
+
+```{r}
+length(c(EGF_cells_to_be_excluded_1$Cell.ID, EGF_cells_to_be_excluded_2$Cell.ID))
+
+sum(xenium_tHIO_EGF@active.ident %in% c("12", "14"))
+```
+
+#### tHIO-EREG
+```{r}
+path_EREG <- "/Users/xiangnid/Desktop/Kelli/Code/24.10.9_tHIO_sub_cluster/20240503__171053__10692-KJ/EREG-10_output-XETG00077__0022396__10692-KJ-1_ROI_A__20240503__171131"
+
+xenium_tHIO_EREG <- load_xenium_data(path_EREG, 0.4, "EREG_umap")
+```
+
+```{r}
+exclude_cell_path_2 <- c("~/tHIO cell stats and maps/EREG/Kidney_01_cells_stats.csv", "~/tHIO cell stats and maps/EREG/Kidney_02_cells_stats.csv", "~/tHIO cell stats and maps/EREG/Kidney_03_cells_stats.csv", "~/tHIO cell stats and maps/EREG/Kidney_04_cells_stats.csv")
+
+for (i in 1:length(exclude_cell_path_2)) assign(paste0("EREG_cells_to_be_excluded_", i), read.csv(exclude_cell_path_2[i]))
+```
+
+```{r}
+length(c(EREG_cells_to_be_excluded_1$Cell.ID, EREG_cells_to_be_excluded_2$Cell.ID, EREG_cells_to_be_excluded_3$Cell.ID, EREG_cells_to_be_excluded_4$Cell.ID))
+
+sum(xenium_tHIO_EREG@active.ident %in% c("15", "16", "17", "18", "20", "22", "25"))
+```
+
+### Subsetting
+```{r}
+external_cluster_EGF <- read.csv("~/tHIO cell stats and maps/EGF/EGF_all cells_cells_stats.csv")
+
+external_cluster_EREG <- read.csv("~/tHIO cell stats and maps/EREG/EREG_all cells_cells_stats.csv")
+
+external_cluster_EREG <- external_cluster_EREG %>% 
+  dplyr::filter(Cluster %in% c("Cluster 13", "Cluster 19", "Cluster 27"))
+```
+
+```{r}
+exclude_cell_and_recluster <- function(xenium_object_full, cell_ID, reso, file_name){
+  
+  xenium_object <- subset(xenium_object_full, cells = setdiff(colnames(xenium_object_full), cell_ID))
+    
+  xenium_object <- SCTransform(xenium_object, assay = "Xenium")
+  xenium_object <- RunPCA(xenium_object, npcs = 30, features = rownames(xenium_object))
+  xenium_object <- RunUMAP(xenium_object, dims = 1:30)
+  xenium_object <- FindNeighbors(xenium_object, reduction = "pca", dims = 1:30)
+  xenium_object <- FindClusters(xenium_object, resolution = reso)
+  
+  pdf(paste0("umaps_subsets_v1/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object)
+}
+```
+
+```{r}
+xenium_tHIO_EGF_sub <- exclude_cell_and_recluster(xenium_tHIO_EGF, external_cluster_EGF$Cell.ID, 0.5, "xenium_tHIO_EGF_sub")
+
+xenium_tHIO_EREG_sub <- exclude_cell_and_recluster(xenium_tHIO_EREG, external_cluster_EREG$Cell.ID, 0.5, "xenium_tHIO_EREG_sub")
+```
+
+
+```{r}
+dim(xenium_tHIO_EGF_sub)[2] + dim(external_cluster_EGF)[1] == dim(xenium_tHIO_EGF)[2]
+
+dim(xenium_tHIO_EREG_sub)[2] + dim(external_cluster_EREG)[1] == dim(xenium_tHIO_EREG)[2]
+```
+
+### Subsetting v2
+```{r}
+xenium_tHIO_EGF_sub <- subset(xenium_tHIO_EGF_sub, idents = setdiff(levels(xenium_tHIO_EGF_sub@active.ident), "16"))
+
+xenium_tHIO_EREG_sub <- subset(xenium_tHIO_EREG_sub, idents = setdiff(levels(xenium_tHIO_EREG_sub@active.ident), c("22", "23", "24", "26", "27")))
+```
+
+```{r}
+recluster_object <- function(xenium_object, reso, file_name){
+    
+  xenium_object <- SCTransform(xenium_object, assay = "Xenium")
+  xenium_object <- RunPCA(xenium_object, npcs = 30, features = rownames(xenium_object))
+  xenium_object <- RunUMAP(xenium_object, dims = 1:30)
+  xenium_object <- FindNeighbors(xenium_object, reduction = "pca", dims = 1:30)
+  xenium_object <- FindClusters(xenium_object, resolution = reso)
+  
+  pdf(paste0("umaps_subsets_v2/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object)
+}
+```
+
+
+```{r}
+xenium_tHIO_EGF_sub <- recluster_object(xenium_tHIO_EGF_sub, 0.8, "xenium_tHIO_EGF_sub_v2")
+xenium_tHIO_EREG_sub <- recluster_object(xenium_tHIO_EREG_sub, 0.8, "xenium_tHIO_EREG_sub_v2")
+```
+
+
+## Figure 5A & 5B
+### Recluster epi and mesn EREG
+```{r}
+EREG_epi <- subset(xenium_tHIO_EREG_sub, idents = c(2, 8, 11, 12, 13, 15, 16, 21, 22, 23, 24, 26, 29))
+EREG_mesn <- subset(xenium_tHIO_EREG_sub, idents = c(0, 1, 3, 4, 5, 6, 7, 9, 10, 14, 17, 18, 19, 20, 25, 27, 28))
+```
+
+```{r}
+re_cluster_and_draw_umap <- function(xenium_object_sub, reso, folder_name, umap_name){
+  DefaultAssay(xenium_object_sub) <- "Xenium"
+  
+  xenium_object_sub <- SCTransform(xenium_object_sub, assay = "Xenium")
+  xenium_object_sub <- RunPCA(xenium_object_sub, npcs = 30, features = rownames(xenium_object_sub))
+  xenium_object_sub <- RunUMAP(xenium_object_sub, dims = 1:30)
+  xenium_object_sub <- FindNeighbors(xenium_object_sub, reduction = "pca", dims = 1:30)
+  xenium_object_sub <- FindClusters(xenium_object_sub, resolution = reso)
+  
+  pdf(paste0(folder_name, "/", umap_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object_sub)
+}
+```
+
+```{r}
+EREG_epi <- re_cluster_and_draw_umap(EREG_epi, 0.8, "EREG_after_QC_plots/epi_sub", "epi_recluster_umap")
+EREG_mesn <- re_cluster_and_draw_umap(EREG_mesn, 0.8, "EREG_after_QC_plots/mesn_sub", "mesn_recluster_umap")
+```
+
+### Recluster epi and mesn EGF
+```{r}
+EGF_epi <- subset(xenium_tHIO_EGF_sub, idents = c(1, 16, 11, 23, 22, 13, 14, 18, 9))
+EGF_mesn <- subset(xenium_tHIO_EGF_sub, idents = c(0, 3, 2, 12, 5, 10, 7, 17, 20, 19, 24, 6, 8, 21, 15, 4))
+```
+
+```{r}
+re_cluster_and_draw_umap <- function(xenium_object_sub, reso, folder_name, umap_name){
+  DefaultAssay(xenium_object_sub) <- "Xenium"
+  
+  xenium_object_sub <- SCTransform(xenium_object_sub, assay = "Xenium")
+  xenium_object_sub <- RunPCA(xenium_object_sub, npcs = 30, features = rownames(xenium_object_sub))
+  xenium_object_sub <- RunUMAP(xenium_object_sub, dims = 1:30)
+  xenium_object_sub <- FindNeighbors(xenium_object_sub, reduction = "pca", dims = 1:30)
+  xenium_object_sub <- FindClusters(xenium_object_sub, resolution = reso)
+  
+  pdf(paste0(folder_name, "/", umap_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object_sub)
+}
+```
+
+```{r}
+EGF_epi <- re_cluster_and_draw_umap(EGF_epi, 0.8, "EGF_after_QC_plots/epi_sub", "epi_recluster_umap")
+EGF_mesn <- re_cluster_and_draw_umap(EGF_mesn, 0.8, "EGF_after_QC_plots/mesn_sub", "mesn_recluster_umap")
+```
+
+### Reduce cluster number for epi
+```{r}
+EGF_epi <- FindClusters(EGF_epi, algorithm = 2, resolution = 0.5)
+
+EREG_epi <- FindClusters(EREG_epi, algorithm = 2, resolution = 0.4)
+```
+
+### Extract Fibroblasts and recluster
+```{r}
+recluster_object <- function(xenium_object, reso, file_name){
+    
+  xenium_object <- SCTransform(xenium_object, assay = "Xenium")
+  xenium_object <- RunPCA(xenium_object, npcs = 30, features = rownames(xenium_object))
+  xenium_object <- RunUMAP(xenium_object, dims = 1:30)
+  xenium_object <- FindNeighbors(xenium_object, reduction = "pca", dims = 1:30)
+  xenium_object <- FindClusters(xenium_object, resolution = reso)
+  
+  pdf(paste0("Fibroblasts_subset/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(xenium_object, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(xenium_object)
+}
+```
+
+
+#### Level 1
+```{r}
+DimPlot(EGF_mesn)
+
+EGF_Fibro <- subset(EGF_mesn, idents = c(1, 7,  12, 15, 6, 13, 11, 16, 3, 19, 21))
+EGF_Fibro <- recluster_object(EGF_Fibro, 0.8, "EGF_Fibro")
+
+```
+
+```{r}
+DimPlot(EREG_mesn)
+
+EREG_Fibro <- subset(EREG_mesn, idents = c(2, 19, 25, 3, 1, 5, 11, 14, 15, 16, 17, 18, 20, 22 , 6, 26, 28))
+EREG_Fibro <- recluster_object(EREG_Fibro, 0.8, "EREG_Fibro")
+
+```
+
+#### Level 2
+```{r}
+EGF_Fibro_sub <- subset(EGF_Fibro, idents = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13))
+EGF_Fibro_sub <- recluster_object(EGF_Fibro_sub, 0.8, "further_sub/EGF_Fibro_sub")
+
+```
+
+```{r}
+EREG_Fibro_sub <- subset(EREG_Fibro, idents = c(0, 1, 2, 3, 4, 5, 7, 8, 12, 14, 15, 17, 20, 21, 22, 24, 25))
+EREG_Fibro_sub <- recluster_object(EREG_Fibro_sub, 0.8, "further_sub/EREG_Fibro_sub")
+
+```
+
+
+### label and merge subsets
+#### Mesn
+##### EGF
+```{r}
+EGF_fribro_sub_label <- unlist(str_split("0: fibro2_SEC
+1: fibro2_SMF1
+2: fibro2_ADAMDEC1 LPF / FABP5 LPF (hi)
+3: fibro2_SMF2
+4: fibro2_SMF3
+5: fibro2_SMF4_proliferating
+6: fibro2_SEC (NPY)1
+7: fibro2_Mesn_lo
+8: fibro2_ADAMDC1 LPF / FABP5 LPF-mid
+9: fibro2_Mesn_mid/lo
+10: fibro2_Mesn_mid/lo2_proliferating
+11: fibro2_SMF-mid / VSMC-mid
+12: fibro2_SEC-mid/ LPF-lo
+13: fibro2_ADAMDEC1 LPF / SEC-lo
+14: fibro2_SEC (NPY)2
+15: fibro2_VSMC", pattern = "\n"))
+
+names(EGF_fribro_sub_label) <- levels(EGF_Fibro_sub@active.ident)
+
+EGF_Fibro_sub <- RenameIdents(EGF_Fibro_sub, EGF_fribro_sub_label)
+```
+
+```{r}
+EGF_fibro_label <- unlist(str_split("0: fibro_SFRP1+ mesn
+1: fibro_SMF
+2: fibro_SEC (NPY+)
+3: fibro_LPF/ FABP5
+4: fibro_SMF
+5: fibro_SMF/SMC (low)_Proliferating
+6: fibro_LPF (mid) / FABP5
+7: fibro_Mesn
+8: fibro_Mesn
+9: fibro_SEC (NPY)
+10: fibro_VSMC
+11: fibro_SMF / VSMC
+12: fibro_Mesn_Proliferating
+13: fibro_SEC (BMP3)
+14: fibro_Pericyte
+15: fibro_VSMC
+16: fibro_SFRP1+ VSMC (low)
+17: fibro_ICC", pattern = "\n"))
+
+names(EGF_fibro_label) <- levels(EGF_Fibro@active.ident)
+
+EGF_Fibro <- RenameIdents(EGF_Fibro, EGF_fibro_label)
+```
+
+```{r}
+EGF_mesn_label <- unlist(str_split("0_SMC_1
+1_Mesn_SMF 
+2_SMC-lo_externa-related
+3_SMC_Externa (SFRP1+)
+4_Endo
+5_SMC_MM-like
+6_Mesn_LPF
+7_Mesn_SEC (Villus2)
+8_Endo_FABP5+
+9_SMC
+10_SMC_proliferative
+11_Mesn_Fibroblast-lo
+12_Mesn_proliferation
+13_Mesn_LPF (rare)
+14_ENS_1 (VIP)
+15_Mesn_SEC (villus)
+16_Mesn_SMF  (lo, rare)
+17_SMC
+18_ENS_2
+19_Mesn_FIBIN-hi fibroblast
+20_ENS/ Endo_lymphatic endo
+21_Mesn_Fibroblast (rare)", pattern = "\n"))
+
+names(EGF_mesn_label) <- levels(EGF_mesn@active.ident)
+
+EGF_mesn <- RenameIdents(EGF_mesn, EGF_mesn_label)
+
+DimPlot(EGF_mesn)
+```
+
+```{r}
+EGF_mesn_idents <- tibble(
+  cell_id = names(EGF_mesn@active.ident),
+  label = EGF_mesn@active.ident
+  )
+
+EGF_fibro_idents <- tibble(
+  cell_id = names(EGF_Fibro@active.ident),
+  label = EGF_Fibro@active.ident
+)
+
+EGF_fibro_sub_idents <- tibble(
+  cell_id = names(EGF_Fibro_sub@active.ident),
+  label = EGF_Fibro_sub@active.ident
+)
+
+EGF_final_mesn_label <- left_join(EGF_mesn_idents, left_join(EGF_fibro_idents, EGF_fibro_sub_idents, by = "cell_id"), by = "cell_id")
+
+EGF_final_mesn_label <- EGF_final_mesn_label %>%
+  mutate(group = case_when(
+    !is.na(label.y) ~ label.y,
+    !is.na(label.x) ~ label.x,
+    TRUE ~ label
+    )) %>% 
+  select(cell_id, group)
+```
+
+
+##### EREG
+```{r}
+EREG_fribro_sub_label <- unlist(str_split("0: fibro2_SFRP1+ mesn
+1: fibro2_ADAMDEC1 LPF
+2: fibro2_SMF1
+3: fibro2_SMF2
+4: fibro2_SMF3
+5: fibro2_SEC(NPY)
+6: fibro2_SEC(crypt)
+7: fibro2_SMF4-lo_proliferating
+8: fibro2_SMF5-mid/lo
+9: fibro2_SMC1
+10: fibro2_SMC_proliferating
+11: fibro2_FABP5 LPF
+12: fibro2_SMF-lo / SEC lower
+13: fibro2_Mesn_mid
+14: fibro2_Mesn_lo1
+15: fibro2_SEC / LPF-lo
+16: fibro2_SMC2
+17: fibro2_SEC-mid/  LPF-mid_proliferating
+18: fibro2_Mesn_lo2
+19: fibro2_SEC-lo
+20: fibro2_Mesn_lo3
+21: fibro2_mesn_lo4_proliferating", pattern = "\n"))
+
+names(EREG_fribro_sub_label) <- levels(EREG_Fibro_sub@active.ident)
+
+EREG_Fibro_sub <- RenameIdents(EREG_Fibro_sub, EREG_fribro_sub_label)
+
+```
+
+```{r}
+EREG_fibro_label <- unlist(str_split("0: fibro_LPF
+1: fibro_SMF
+2: fibro_SMF
+3: fibro_SFRP1+ SMF
+4: fibro_SMC / SMF (low)_proliferating
+5: fibro_SEC
+6: fibro_VSMC
+7: fibro_SMF (VIM-)
+8: fibro_SEC (NPY+)
+9: fibro_VSMC
+10: fibro_VSMC
+11: fibro_VSMC
+12: fibro_Mesn
+13: fibro_VSMC
+14: fibro_LPF / pericyte
+15: fibro_Mesn_low
+16: fibro_ICC
+17: fibro_SEC/LPF/FABP5_Proliferating
+18: fibro_SMC
+19: fibro_VSMC
+20: fibro_SEC -mid/ ADAMDEC1-low
+21: fibro_SEC-mid
+22: fibro_Mesn_low
+23: fibro_Pericyte
+24: fibro_SMC; low-mid / SMF;  low-mid
+25: fibro_Mesn_low_proliferating", pattern = "\n"))
+
+names(EREG_fibro_label) <- levels(EREG_Fibro@active.ident)
+
+EREG_Fibro <- RenameIdents(EREG_Fibro, EREG_fibro_label)
+```
+
+```{r}
+EREG_mesn_label <- unlist(str_split("0_SMC
+1_Mesn_SMF
+2_Mesn_SEC
+3_Mesn_LPF
+4_SMC (mid)
+5_Mesn_ SMF (VIM-neg)
+6_SEC_lo
+7_Endo_FABP5+ endo
+8_SMC
+9_SMC (proliferating)
+10_SMC
+11_Mesn_Fibroblast (lo) (proliferating)
+12_ENS_1 (VIP)
+13_SMC
+14_Mesn_Fibroblast
+15_Mesn_Fibroblast
+16_Mesn_Fibroblast
+17_Mesn_Fibroblast
+18_Mesn_Fibroblast
+19_Mesn_SEC
+20_Mesn_Fibroblast
+21_Mesn_SEC/LPF
+22_Mesn_SFRP1+ fibroblast
+23_ENS_2
+24_Endo_Lymphatic endo
+25_Mesn_SEC
+26_Mesn_DES+/GPX3+
+27_SMC
+28_Mesn_proliferation", pattern = "\n"))
+
+names(EREG_mesn_label) <- levels(EREG_mesn@active.ident)
+
+EREG_mesn <- RenameIdents(EREG_mesn, EREG_mesn_label)
+
+```
+
+```{r}
+EREG_mesn_idents <- tibble(
+  cell_id = names(EREG_mesn@active.ident),
+  label = EREG_mesn@active.ident
+  )
+
+EREG_fibro_idents <- tibble(
+  cell_id = names(EREG_Fibro@active.ident),
+  label = EREG_Fibro@active.ident
+)
+
+EREG_fibro_sub_idents <- tibble(
+  cell_id = names(EREG_Fibro_sub@active.ident),
+  label = EREG_Fibro_sub@active.ident
+)
+
+EREG_final_mesn_label <- left_join(EREG_mesn_idents, left_join(EREG_fibro_idents, EREG_fibro_sub_idents, by = "cell_id"), by = "cell_id")
+
+EREG_final_mesn_label <- EREG_final_mesn_label %>%
+  mutate(group = case_when(
+    !is.na(label.y) ~ label.y,
+    !is.na(label.x) ~ label.x,
+    TRUE ~ label
+    )) %>% 
+  select(cell_id, group)
+
+unique(EREG_final_mesn_label$group)
+```
+
+##### Put the label back
+```{r}
+EGF_final_mesn_label <- EGF_final_mesn_label %>% select("group")
+rownames(EGF_final_mesn_label) <- EGF_mesn_idents$cell_id
+
+EGF_meta <- EGF_mesn@meta.data
+EGF_meta$group <- EGF_final_mesn_label$group
+EGF_mesn@meta.data <- EGF_meta
+
+EREG_final_mesn_label <- EREG_final_mesn_label %>% select("group")
+rownames(EREG_final_mesn_label) <- EREG_mesn_idents$cell_id
+
+EREG_meta <- EREG_mesn@meta.data
+EREG_meta$group <-EREG_final_mesn_label$group
+EREG_mesn@meta.data <- EREG_meta
+```
+
+
+#### Epi
+```{r}
+EGF_epi_label <- unlist(str_split("0_epi_EC_mid villus1
+1_epi_EC_mid villus2
+2_epi_EC_villus tip
+3_epi_TA (proliferating)
+4_epi_ISC/crypt
+5_epi_EEC-lo
+6_epi_Secretory/GC
+7_epi_Upper crypt/TA
+8_epi_EEC
+9_epi_Epithelium-lo
+10_epi_EEC
+11_epi_EC
+12_epi_Regional 2
+13_epi_Crypt/ Paneth cell
+14_epi_debris
+15_epi_ISC + Paneth cell", pattern = "\n"))
+
+names(EGF_epi_label) <- levels(EGF_epi@active.ident)
+
+EGF_epi <- RenameIdents(EGF_epi, EGF_epi_label)
+
+```
+
+```{r}
+EREG_epi_label <- unlist(str_split("0_epi_EC_mid-lower villus-B
+1_epi_EC_mid-upper villus-B (+some A on border areas)
+2_epi_ISC
+3_epi_EEC
+4_epi_Crypt/ ISC
+5_epi_Secretory/ GC
+6_epi_EC_upper villus-A
+7_epi_EC_upper villus-B
+8_epi_EC_lower villus
+9_epi_EC_scattered-mid-villus-B
+10_epi_EC_clumps_mid-villus-patches A+B
+11_epi_ISC
+12_epi_Regional GC_1
+13_epi_Regional_unknown_1
+14_epi_EC_rare_villus-A+B
+15_epi_EC (LYZ+)_rare_villus tip
+16_epi_Tuft cells
+17_epi_EC_rare_villus-B
+18_epi_debris", pattern = "\n"))
+
+names(EREG_epi_label) <- levels(EREG_epi@active.ident)
+
+EREG_epi <- RenameIdents(EREG_epi, EREG_epi_label)
+
+```
+
+### Final merge
+
+```{r}
+EGF_epi$group <- EGF_epi@active.ident
+
+EREG_epi$group <- EREG_epi@active.ident
+
+EGF_epi_label <- data.frame(
+  cell_id = names(EGF_epi$group),
+  group = EGF_epi$group
+)
+
+EREG_epi_label <- data.frame(
+  cell_id = names(EREG_epi$group),
+  group = EREG_epi$group
+)
+```
+
+```{r}
+EGF_mesn_label <- data.frame(
+  cell_id = names(EGF_mesn$group),
+  group = EGF_mesn$group
+)
+
+EREG_mesn_label <- data.frame(
+  cell_id = names(EREG_mesn$group),
+  group = EREG_mesn$group
+)
+```
+
+### Final umap
+#### EGF
+```{r}
+EGF_mesn_annotation <- read.csv("annotation_v1/25.2.10_EGF_final_mesn_label.csv")
+
+EGF_mesn_color <- read_xlsx("color match/EGF_mesn_color.xlsx")
+
+EGF_mesn_annotation_with_hex <- merge(EGF_mesn_color, EGF_mesn_annotation, by.x = "cluster_name", by.y = "group")
+
+EGF_mesn_cell_id <- EGF_mesn_annotation_with_hex$cell_id
+
+EGF_mesn_annotation_with_hex <- EGF_mesn_annotation_with_hex %>% select(-cell_id)
+
+rownames(EGF_mesn_annotation_with_hex) <- EGF_mesn_cell_id
+```
+
+#### EREG
+```{r}
+EREG_mesn_color <- read_xlsx("color match/EREG_mesn_color.xlsx")
+
+EREG_mesn_annotation_with_hex <- merge(EREG_mesn_color, EREG_final_annotation, by.x = "cluster_name", by.y = "group")
+
+EREG_mesn_cell_id <- EREG_mesn_annotation_with_hex$cell_id
+
+EREG_mesn_annotation_with_hex <- EREG_mesn_annotation_with_hex %>% select(-cell_id)
+
+rownames(EREG_mesn_annotation_with_hex) <- EREG_mesn_cell_id
+```
+
+#### Add metadata
+```{r}
+EGF_Fibro_sub <- AddMetaData(EGF_Fibro_sub, EGF_mesn_annotation_with_hex)
+
+EREG_Fibro_sub_final <- subset(xenium_tHIO_EREG_sub, subset = cluster_name %in% EREG_mesn_color$cluster_name)
+
+EREG_Fibro_sub_final <- AddMetaData(EREG_Fibro_sub_final, EREG_mesn_annotation_with_hex)
+
+EREG_Fibro_sub_final <- SCTransform(EREG_Fibro_sub_final, assay = "Xenium")
+EREG_Fibro_sub_final <- RunPCA(EREG_Fibro_sub_final)
+EREG_Fibro_sub_final <- FindNeighbors(EREG_Fibro_sub_final)
+EREG_Fibro_sub_final <- RunUMAP(EREG_Fibro_sub_final, dims = 1:30)
+```
+
+
+```{r}
+EGF_Fibro_final_cell_count <- as.data.frame(table(EGF_Fibro_sub$Hex_codes))
+
+EREG_Fibro_final_cell_count <- as.data.frame(table(EREG_Fibro_sub_final$Hex_codes))
+```
+
+### Subset again 
+
+```{r}
+unique(EGF_Fibro_sub$Hex_codes)
+EGF_Fibro_sub <- subset(EGF_Fibro_sub, subset = Hex_codes %in% c("35DCF4", "F941BA", "F4EA4A", "1A0D6E", "ACF39D"))
+
+EGF_Fibro_sub <- SCTransform(EGF_Fibro_sub, assay = "Xenium")
+EGF_Fibro_sub <- RunPCA(EGF_Fibro_sub)
+EGF_Fibro_sub <- FindNeighbors(EGF_Fibro_sub)
+EGF_Fibro_sub <- RunUMAP(EGF_Fibro_sub, dims = 1:30)
+```
+
+```{r}
+unique(EREG_Fibro_sub_final$Hex_codes)
+EREG_Fibro_sub_final <- subset(EREG_Fibro_sub_final, subset = Hex_codes %in% c("35DCF4", "F941BA", "F4EA4A", "1A0D6E", "ACF39D"))
+
+EREG_Fibro_sub_final <- SCTransform(EREG_Fibro_sub_final, assay = "Xenium")
+EREG_Fibro_sub_final <- RunPCA(EREG_Fibro_sub_final)
+EREG_Fibro_sub_final <- FindNeighbors(EREG_Fibro_sub_final)
+EREG_Fibro_sub_final <- RunUMAP(EREG_Fibro_sub_final, dims = 1:30)
+```
+
+
+# Adult Xenium data
+
+## Figure 6A 
+### Functions
+
+#### Read in data
+```{r}
+load_xenium_data <- function(path, cell_ID_path, reso){
+  cell_stats <- read.csv(cell_ID_path)
+  cell_ID <- cell_stats$Cell.ID
+  
+  set.seed(888)
+  
+  xenium_object <- LoadXenium(path, fov = "fov")
+  
+  xenium_object_sub <- subset(xenium_object, subset = nCount_Xenium > 0, cells = cell_ID) 
+  
+  xenium_object_sub <- SCTransform(xenium_object_sub, assay = "Xenium")
+  xenium_object_sub <- RunPCA(xenium_object_sub, npcs = 30, features = rownames(xenium_object_sub))
+  xenium_object_sub <- RunUMAP(xenium_object_sub, dims = 1:30)
+  xenium_object_sub <- FindNeighbors(xenium_object_sub, reduction = "pca", dims = 1:30)
+  xenium_object_sub <- FindClusters(xenium_object_sub, resolution = reso)
+  
+  return(xenium_object_sub)
+  }
+```
+
+### Apply functions
+#### Y44
+```{r}
+path_Y44 <- "adult-44yo_output-XETG00077__0004050__9719-KJ-2_ROI_A__20240105__165644"
+cell_Y44 <- "~/Xenium_adult analysis/44yo_duo coordinates export-USE THIS ONE/44yo_duo_cells_stats.csv"
+
+xenium_Y44 <- load_xenium_data(path_Y44, cell_Y44, 0.3)
+
+xenium_Y44 <- FindClusters(xenium_Y44, resolution = 0.5)
+```
+
+
+### Take out cluster 13 and recluster
+```{r}
+cluster_13 <- subset(xenium_Y44, idents = "13")
+
+cluster_13 <- RunUMAP(cluster_13, dims = 1:30)
+cluster_13 <- FindNeighbors(cluster_13, reduction = "pca", dims = 1:30)
+cluster_13 <- FindClusters(cluster_13, resolution = 0.1)
+
+```
+
+### Annotate
+
+#### Level 1
+```{r}
+xenium_Y44$annotation_lvl1 <- case_when(
+  xenium_Y44@active.ident %in% c(0, 2, 4, 7, 11, 12, 18, 19) ~ "epi",
+  xenium_Y44@active.ident %in% c(1, 6, 20) ~ "immune",
+  xenium_Y44@active.ident %in% c(3, 8) ~ "SMC",
+  xenium_Y44@active.ident %in% c(5, 17) ~ "endo",
+  xenium_Y44@active.ident %in% c(9, 10, 14, 15, 16) ~ "fibro",
+  xenium_Y44@active.ident %in% c(13) ~ "uncertain"
+)
+
+DimPlot(xenium_Y44, group.by = "annotation_lvl1", label = T)
+
+annotation_full_list <- data.frame(
+  cell_ID = names(xenium_Y44$annotation_lvl1),
+  annotation_lvl1 = xenium_Y44$annotation_lvl1
+)
+```
+
+```{r}
+cluster_13$annotation_lvl1 <- case_when(
+  cluster_13@active.ident %in% c(0, 2) ~ "fibro",
+  cluster_13@active.ident %in% c(1) ~ "ENS"
+)
+
+DimPlot(cluster_13, group.by = "annotation_lvl1", label = T)
+
+annotation_cluster_13 <- data.frame(
+  cell_ID = names(cluster_13$annotation_lvl1),
+  annotation_lvl1 = cluster_13$annotation_lvl1
+)
+```
+
+```{r}
+annotation_cluster_13_lookup <- setNames(annotation_cluster_13$annotation_lvl1, annotation_cluster_13$cell_ID)
+
+annotation_full_list$annotation_lvl1 <- ifelse(annotation_full_list$cell_ID %in% names(annotation_cluster_13_lookup), annotation_cluster_13_lookup[annotation_full_list$cell_ID], annotation_full_list$annotation_lvl1)
+```
+
+```{r}
+annotation_full_data <- setNames(annotation_full_list$annotation_lvl1, annotation_full_list$cell_ID)
+
+xenium_Y44 <- AddMetaData(xenium_Y44, annotation_full_data, "annotation_lvl1")
+```
+
+
+#### Further break down
+```{r}
+Xenium_sub_extraction <- function(object, cluster_name, reso, folder_name, file_name){
+  dir.create(folder_name, recursive = T)
+  
+  sub <- subset(object, idents = cluster_name)
+  
+  set.seed(888)
+  
+  sub <- SCTransform(sub, assay = "Xenium")
+  sub <- RunPCA(sub, npcs = 30, features = rownames(sub))
+  sub <- RunUMAP(sub, dims = 1:30)
+  sub <- FindNeighbors(sub, reduction = "pca", dims = 1:30)
+  sub <- FindClusters(sub, resolution = reso)
+  
+  pdf(paste0(folder_name, "/", file_name, "_umap.pdf"), width = 8, height = 6)
+  print(DimPlot(sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(sub)
+}
+```
+
+
+```{r}
+Idents(xenium_Y44) <- "annotation_lvl1"
+
+Y44_fibro <- Xenium_sub_extraction(xenium_Y44, "fibro", 0.5, "Y44_sub/fibro", "Y44_fibro_sub")
+Y44_endo <- Xenium_sub_extraction(xenium_Y44, "endo", 0.5, "Y44_sub/endo", "Y44_endo_sub")
+Y44_ENS <- Xenium_sub_extraction(xenium_Y44, "ENS", 0.5, "Y44_sub/ENS", "Y44_ENS_sub")
+Y44_epi <- Xenium_sub_extraction(xenium_Y44, "epi", 0.5, "Y44_sub/epi", "Y44_epi_sub")
+Y44_immune <- Xenium_sub_extraction(xenium_Y44, "immune", 0.5, "Y44_sub/immune", "Y44_immune_sub")
+Y44_SMC <- Xenium_sub_extraction(xenium_Y44, "SMC", 0.5, "Y44_sub/SMC", "Y44_SMC_sub")
+
+dim(Y44_fibro)[2] + dim(Y44_endo)[2] + dim(Y44_ENS)[2] + dim(Y44_epi)[2] + dim(Y44_immune)[2] + dim(Y44_SMC)[2] == dim(xenium_Y44)[2]
+```
+
+### QC1 - recluster
+
+#### Immune
+```{r}
+Y44_immune_sub <- subset(Y44_immune, idents = "3")
+
+set.seed(888)
+  
+Y44_immune_sub <- SCTransform(Y44_immune_sub, assay = "Xenium")
+Y44_immune_sub <- RunPCA(Y44_immune_sub, npcs = 30, features = rownames(Y44_immune_sub))
+Y44_immune_sub <- RunUMAP(Y44_immune_sub, dims = 1:30)
+Y44_immune_sub <- FindNeighbors(Y44_immune_sub, reduction = "pca", dims = 1:30)
+Y44_immune_sub <- FindClusters(Y44_immune_sub, resolution = 0.5)
+  
+```
+
+#### Endo
+```{r}
+Y44_endo_sub <- subset(Y44_endo, idents = "0")
+
+set.seed(888)
+  
+Y44_endo_sub <- SCTransform(Y44_endo_sub, assay = "Xenium")
+Y44_endo_sub <- RunPCA(Y44_endo_sub, npcs = 30, features = rownames(Y44_endo_sub))
+Y44_endo_sub <- RunUMAP(Y44_endo_sub, dims = 1:30)
+Y44_endo_sub <- FindNeighbors(Y44_endo_sub, reduction = "pca", dims = 1:30)
+Y44_endo_sub <- FindClusters(Y44_endo_sub, resolution = 0.5)
+
+```
+
+#### ENS & Fibro
+```{r}
+fibro_from_ENS <- colnames(subset(Y44_ENS, idents = c(0, 1)))
+
+Y44_fibro <- subset(xenium_Y44, cells = c(colnames(Y44_fibro), fibro_from_ENS))
+
+set.seed(888)
+  
+Y44_fibro <- SCTransform(Y44_fibro, assay = "Xenium")
+Y44_fibro <- RunPCA(Y44_fibro, npcs = 30, features = rownames(Y44_fibro))
+Y44_fibro <- RunUMAP(Y44_fibro, dims = 1:30)
+Y44_fibro <- FindNeighbors(Y44_fibro, reduction = "pca", dims = 1:30)
+Y44_fibro <- FindClusters(Y44_fibro, resolution = 0.5)
+
+```
+
+```{r}
+Y44_ENS_sub <- subset(Y44_ENS, idents = setdiff(unique(Y44_ENS@active.ident), c(0, 1)))
+
+set.seed(888)
+  
+Y44_ENS_sub <- SCTransform(Y44_ENS_sub, assay = "Xenium")
+Y44_ENS_sub <- RunPCA(Y44_ENS_sub, npcs = 30, features = rownames(Y44_ENS_sub))
+Y44_ENS_sub <- RunUMAP(Y44_ENS_sub, dims = 1:30)
+Y44_ENS_sub <- FindNeighbors(Y44_ENS_sub, reduction = "pca", dims = 1:30)
+Y44_ENS_sub <- FindClusters(Y44_ENS_sub, resolution = 0.5)
+
+```
+
+
+
+### QC2
+
+```{r}
+re_cluster_by_cluster <- function(suerat_object, clusters_to_be_removed, reso, folder_name, file_name){
+  
+  dir.create(folder_name, recursive = T)
+  
+  suerat_object_sub <- subset(suerat_object, idents = setdiff(unique(suerat_object@active.ident), clusters_to_be_removed))
+
+  set.seed(888)
+    
+  suerat_object_sub <- SCTransform(suerat_object_sub, assay = "Xenium")
+  suerat_object_sub <- RunPCA(suerat_object_sub, npcs = 30, features = rownames(suerat_object_sub))
+  suerat_object_sub <- RunUMAP(suerat_object_sub, dims = 1:30)
+  suerat_object_sub <- FindNeighbors(suerat_object_sub, reduction = "pca", dims = 1:30)
+  suerat_object_sub <- FindClusters(suerat_object_sub, resolution = reso)
+    
+  pdf(paste0(folder_name, "/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(suerat_object_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(suerat_object_sub)
+}
+```
+
+```{r}
+re_cluster_by_cell_ID <- function(suerat_object, cells_to_be_removed, reso, folder_name, file_name){
+  
+  dir.create(folder_name, recursive = T)
+  
+  suerat_object_sub <- subset(suerat_object, cells = setdiff(colnames(suerat_object), cells_to_be_removed))
+
+  set.seed(888)
+    
+  suerat_object_sub <- SCTransform(suerat_object_sub, assay = "Xenium")
+  suerat_object_sub <- RunPCA(suerat_object_sub, npcs = 30, features = rownames(suerat_object_sub))
+  suerat_object_sub <- RunUMAP(suerat_object_sub, dims = 1:30)
+  suerat_object_sub <- FindNeighbors(suerat_object_sub, reduction = "pca", dims = 1:30)
+  suerat_object_sub <- FindClusters(suerat_object_sub, resolution = reso)
+    
+  pdf(paste0(folder_name, "/", file_name, ".pdf"), width = 8, height = 6)
+  print(DimPlot(suerat_object_sub, raster=FALSE, label = T) + NoLegend())
+  dev.off()
+  
+  return(suerat_object_sub)
+}
+```
+
+#### Fibro
+```{r}
+Y44_fibro_sub <- re_cluster_by_cluster(Y44_fibro, c(7, 12), 0.3, "QC_2/fibro", "fibro_cluster_7_12_removed")
+
+```
+
+#### Endo
+```{r}
+endo_cells_to_remove <- colnames(subset(Y44_endo_sub, idents = 0))
+
+Y44_endo_final <- re_cluster_by_cell_ID(Y44_endo, endo_cells_to_remove, 0.5, "QC_2/endo", "endo_subcluster_0_removed")
+
+```
+
+#### Immune
+```{r}
+Y44_immune_final <- re_cluster_by_cluster(Y44_immune, 3, 0.5, "QC_2/immune", "immune_cluster_3_removed")
+
+```
+
+#### Epi
+```{r}
+epi_cell_from_fibro <- colnames(subset(Y44_fibro_sub, idents = 5))
+epi_cell_from_endo <- endo_cells_to_remove
+epi_cell_from_immune <- colnames(Y44_immune_sub)
+
+all_epi_cells <- c(colnames(Y44_epi), epi_cell_from_fibro, epi_cell_from_endo, epi_cell_from_immune)
+
+Y44_epi_final <- subset(xenium_Y44, cells = all_epi_cells)
+
+set.seed(888)
+    
+Y44_epi_final <- SCTransform(Y44_epi_final, assay = "Xenium")
+Y44_epi_final <- RunPCA(Y44_epi_final, npcs = 30, features = rownames(Y44_epi_final))
+Y44_epi_final <- RunUMAP(Y44_epi_final, dims = 1:30)
+Y44_epi_final <- FindNeighbors(Y44_epi_final, reduction = "pca", dims = 1:30)
+Y44_epi_final <- FindClusters(Y44_epi_final, resolution = 0.5)
+
+
+```
+
+```{r}
+Y44_ENS_final <- Y44_ENS_sub
+```
+
+
+### QC3
+```{r}
+Y44_fibro_sub2 <- re_cluster_by_cluster(Y44_fibro_sub, c(5, 6), 0.5, "QC_3/fibro", "fibro_cluster_5_6_from_v2_removed")
+
+```
+
+
+## Figure 6F
+### QC for fibro (cluster 5 was removed cluster 8 was extracted)
+```{r}
+Y44_fibro_final <- re_cluster_by_cluster(Y44_fibro_sub2, c(5, 8), 0.4, "QC_4/fibro", "fibro_cluster_5_8_from_v3_removed")
+
+draw_plots("QC_4/fibro/fibro_marker", "Y44_fibro_fibro_marker", Y44_fibro_final, fibro, 20, 12, 20, 24)
+
+cell_ID_group(Y44_fibro_final, "QC_4/fibro", "xenium_coordinate_Y44_fibro_QC4")
+
+dim(Y44_fibro_final)[2] + 1483 + 724 == dim(Y44_fibro_sub2)[2]
+```
+
+```{r}
+Y44_fibro_cluster8 <- subset(Y44_fibro_sub2, idents = 8)
+
+set.seed(888)
+    
+Y44_fibro_cluster8 <- SCTransform(Y44_fibro_cluster8, assay = "Xenium")
+Y44_fibro_cluster8 <- RunPCA(Y44_fibro_cluster8, npcs = 30, features = rownames(Y44_fibro_cluster8))
+Y44_fibro_cluster8 <- RunUMAP(Y44_fibro_cluster8, dims = 1:30)
+Y44_fibro_cluster8 <- FindNeighbors(Y44_fibro_cluster8, reduction = "pca", dims = 1:30)
+Y44_fibro_cluster8 <- FindClusters(Y44_fibro_cluster8, resolution = 0.3)
+
+```
+
+
+### Final annotation
+#### Epi
+```{r}
+Y44_epi_final$annotation_lvl2 <- case_when(
+  Y44_epi_final@active.ident == 0 ~ "0: epi",
+  Y44_epi_final@active.ident == 1 ~ "1: epi",
+  Y44_epi_final@active.ident == 2 ~ "2: epi",
+  Y44_epi_final@active.ident == 3 ~ "3: epi",
+  Y44_epi_final@active.ident == 4 ~ "4: epi",
+  Y44_epi_final@active.ident == 5 ~ "5: epi",
+  Y44_epi_final@active.ident == 6 ~ "6: epi",
+  Y44_epi_final@active.ident == 7 ~ "7: epi",
+  Y44_epi_final@active.ident == 8 ~ "8: epi",
+  Y44_epi_final@active.ident == 9 ~ "9: epi",
+  Y44_epi_final@active.ident == 10 ~ "10: epi",
+  Y44_epi_final@active.ident == 11 ~ "11: epi",
+  Y44_epi_final@active.ident == 12 ~ "12: epi",
+  Y44_epi_final@active.ident == 13 ~ "13: epi",
+  Y44_epi_final@active.ident == 14 ~ "14: epi",
+  Y44_epi_final@active.ident == 15 ~ "15: epi",
+  Y44_epi_final@active.ident == 16 ~ "16: epi",
+  Y44_epi_final@active.ident == 17 ~ "17: epi",
+  Y44_epi_final@active.ident == 18 ~ "18: epi"
+)
+
+DimPlot(Y44_epi_final, group.by = "annotation_lvl2")
+```
+
+#### Fibro
+```{r}
+Y44_fibro_final$annotation_lvl2 <- case_when(
+  Y44_fibro_final@active.ident == 0 ~ "0: Fibro-LPF",
+  Y44_fibro_final@active.ident == 1 ~ "1: Fibro-LPF",
+  Y44_fibro_final@active.ident == 2 ~ "2: Fibro-SMF",
+  Y44_fibro_final@active.ident == 3 ~ "3: Fibro-SEC",
+  Y44_fibro_final@active.ident == 4 ~ "4: Fibro-mixed-fibroblast",
+  Y44_fibro_final@active.ident == 5 ~ "5: Fibro-SMC",
+  Y44_fibro_final@active.ident == 6 ~ "6: Fibro-LPF",
+  Y44_fibro_final@active.ident == 7 ~ "7: Fibro-LPF",
+  Y44_fibro_final@active.ident == 8 ~ "8: Fibro-LPF",
+  Y44_fibro_final@active.ident == 9 ~ "9: Fibro-LPF"
+)
+
+DimPlot(Y44_fibro_final, group.by = "annotation_lvl2")
+
+Y44_fibro_final_annot <- tibble(
+  ident = Y44_fibro_final$annotation_lvl2,
+  cell_ID = names(Y44_fibro_final$annotation_lvl2)
+)
+```
+
+```{r}
+# Take cluster 7 and 12 from origninal fibro 
+Y44_fibro <- RenameIdents(Y44_fibro,
+  "7" = "7.1: Fibro-ICC",
+  "12" = "12.1: Fibro-proliferative")
+
+cells_removed_QC1 <- FetchData(subset(Y44_fibro, idents = c("7.1: Fibro-ICC", "12.1: Fibro-proliferative")),
+                               vars = "ident")
+
+cells_removed_QC1$cell_ID <- rownames(cells_removed_QC1)
+
+```
+
+```{r}
+# Take cluster 6 from fibro sub
+Y44_fibro_sub <- RenameIdents(Y44_fibro_sub,
+  "6" = "6.2: Fibro-SMC")
+
+cells_removed_QC2 <- FetchData(subset(Y44_fibro_sub, idents = c("6.2: Fibro-SMC")),
+                               vars = "ident")
+
+cells_removed_QC2$cell_ID <- rownames(cells_removed_QC2)
+```
+
+```{r}
+# Take cluster 5 from fibro sub 2
+Y44_fibro_sub2 <- RenameIdents(Y44_fibro_sub2,
+  "5" = "5.3: Fibro-SMC")
+
+cells_removed_QC3 <- FetchData(subset(Y44_fibro_sub2, idents = c("5.3: Fibro-SMC")),
+                               vars = "ident")
+
+cells_removed_QC3$cell_ID <- rownames(cells_removed_QC3)
+
+# Annotate cluster 8 from fibro sub 2
+Y44_fibro_cluster8 <- RenameIdents(
+  Y44_fibro_cluster8,
+  "0" = "0.4: Fibro-SEC",
+  "1" = "1.4: Fibro-CXCL13+ fibroblast"
+)
+
+cells_removed_QC4 <- FetchData(Y44_fibro_cluster8, idents = c("5.3: Fibro-SMC"),
+                               vars = "ident")
+
+cells_removed_QC4$cell_ID <- rownames(cells_removed_QC4)
+```
+
+```{r}
+full_mesn_annotation <- rbind(cells_removed_QC1, cells_removed_QC2, cells_removed_QC3, cells_removed_QC4, Y44_fibro_final_annot)
+
+# Validate the cell number
+#length(epi_cell_from_fibro) + dim(full_mesn_annotation)[1] == dim(Y44_fibro)[2]
+```
+
+#### SMC
+```{r}
+Y44_SMC$annotation_lvl2 <- case_when(
+  Y44_SMC@active.ident == 0 ~ "0: SMC-OLM",
+  Y44_SMC@active.ident == 1 ~ "1: SMC-ICM",
+  Y44_SMC@active.ident == 2 ~ "2: SMC-MM",
+  Y44_SMC@active.ident == 3 ~ "3: SMC-FOXF1/ADAMDEC1 core",
+  Y44_SMC@active.ident == 4 ~ "4: SMC-SHISA3+ ME",
+  Y44_SMC@active.ident == 5 ~ "5: SMC-FABP5+ pericytes",
+  Y44_SMC@active.ident == 6 ~ "6: SMC-FIBIN+ ME",
+  Y44_SMC@active.ident == 7 ~ "7: SMC-SupMC",
+  Y44_SMC@active.ident == 8 ~ "8: SMC-ME-low",
+  Y44_SMC@active.ident == 9 ~ "9: SMC-ICC/SFRP1+",
+  Y44_SMC@active.ident == 10 ~ "10: SMC-proliferative LP-MC"
+)
+
+DimPlot(Y44_SMC, group.by = "annotation_lvl2")
+```
+
+#### Endo
+```{r}
+Y44_endo_final$annotation_lvl2 <- case_when(
+  Y44_endo_final@active.ident == 0 ~ "0: endo",
+  Y44_endo_final@active.ident == 1 ~ "1: endo",
+  Y44_endo_final@active.ident == 2 ~ "2: endo",
+  Y44_endo_final@active.ident == 3 ~ "3: endo",
+  Y44_endo_final@active.ident == 4 ~ "4: endo",
+  Y44_endo_final@active.ident == 5 ~ "5: endo",
+  Y44_endo_final@active.ident == 6 ~ "6: endo",
+  Y44_endo_final@active.ident == 7 ~ "7: endo",
+  Y44_endo_final@active.ident == 8 ~ "8: endo",
+  Y44_endo_final@active.ident == 9 ~ "9: endo",
+  Y44_endo_final@active.ident == 10 ~ "10: endo",
+  Y44_endo_final@active.ident == 11 ~ "11: endo",
+  Y44_endo_final@active.ident == 12 ~ "12: endo"
+)
+
+DimPlot(Y44_endo_final, group.by = "annotation_lvl2")
+```
+
+#### ENS
+```{r}
+Y44_ENS_final$annotation_lvl2 <- case_when(
+  Y44_ENS_final@active.ident == 0 ~ "0: ENS-neurons",
+  Y44_ENS_final@active.ident == 1 ~ "1: ENS-glia",
+  Y44_ENS_final@active.ident == 2 ~ "2: ENS-ICC",
+  Y44_ENS_final@active.ident == 3 ~ "3: ENS-ICC-low"
+)
+
+DimPlot(Y44_ENS_final, group.by = "annotation_lvl2")
+```
+
+#### Immune
+```{r}
+Y44_immune_final$annotation_lvl2 <- case_when(
+  Y44_immune_final@active.ident == 0 ~ "0: immune",
+  Y44_immune_final@active.ident == 1 ~ "1: immune",
+  Y44_immune_final@active.ident == 2 ~ "2: immune",
+  Y44_immune_final@active.ident == 3 ~ "3: immune",
+  Y44_immune_final@active.ident == 4 ~ "4: immune",
+  Y44_immune_final@active.ident == 5 ~ "5: immune",
+  Y44_immune_final@active.ident == 6 ~ "6: immune",
+  Y44_immune_final@active.ident == 7 ~ "7: immune",
+  Y44_immune_final@active.ident == 8 ~ "8: immune",
+  Y44_immune_final@active.ident == 9 ~ "9: immune",
+  Y44_immune_final@active.ident == 10 ~ "10: immune",
+  Y44_immune_final@active.ident == 11 ~ "11: immune",
+  Y44_immune_final@active.ident == 12 ~ "12: immune",
+  Y44_immune_final@active.ident == 13 ~ "13: immune",
+  Y44_immune_final@active.ident == 14 ~ "14: immune"
+)
+
+DimPlot(Y44_immune_final, group.by = "annotation_lvl2")
+```
+
+
+#### Full annotation
+```{r}
+epi_annotation <- tibble(
+  cell_ID = names(Y44_epi_final$annotation_lvl2),
+  annotation_lvl2 = Y44_epi_final$annotation_lvl2,
+  genpop_annotation = "Epi"
+)
+
+fibro_annotation <- tibble(
+  cell_ID = full_mesn_annotation$cell_ID,
+  annotation_lvl2 = full_mesn_annotation$ident,
+  genpop_annotation = "Fibro"
+)
+
+SMC_annotation <- tibble(
+  cell_ID = names(Y44_SMC$annotation_lvl2),
+  annotation_lvl2 = Y44_SMC$annotation_lvl2,
+  genpop_annotation = "SMC"  
+)
+
+endo_annotation <- tibble(
+  cell_ID = names(Y44_endo_final$annotation_lvl2),
+  annotation_lvl2 = Y44_endo_final$annotation_lvl2,
+  genpop_annotation = "Endo"
+)
+
+ENS_annotation <- tibble(
+  cell_ID = names(Y44_ENS_final$annotation_lvl2),
+  annotation_lvl2 = Y44_ENS_final$annotation_lvl2,
+  genpop_annotation = "ENS"
+)
+
+immune_annotation <- tibble(
+  cell_ID = names(Y44_immune_final$annotation_lvl2),
+  annotation_lvl2 = Y44_immune_final$annotation_lvl2,
+  genpop_annotation = "Immune"
+)
+
+final_annotation <- as.data.frame(rbind(epi_annotation, fibro_annotation, SMC_annotation, endo_annotation, ENS_annotation, immune_annotation))
+```
+
+#### Add metadata
+```{r}
+rownames_final_annotation <- final_annotation$cell_ID
+
+final_annotation <- final_annotation[, -1]
+
+rownames(final_annotation) <- rownames_final_annotation
+
+xenium_Y44 <- AddMetaData(xenium_Y44, final_annotation)
+```
+
+#### Final fibro
+```{r}
+final_fibro_extraction <- subset(xenium_Y44, subset = annotation_lvl2 %in% unlist(str_split("0: Fibro-LPF
+1: Fibro-LPF
+2: Fibro-SMF
+3: Fibro-SEC
+6: Fibro-LPF
+7: Fibro-LPF
+8: Fibro-LPF
+9: Fibro-LPF
+0.4: Fibro-SEC
+1.4: Fibro-CXCL13+ fibroblast", pattern = "\n")))
+
+final_fibro_extraction <- RunUMAP(final_fibro_extraction, dims = 1:30)
+```
+
