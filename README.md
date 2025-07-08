@@ -3,11 +3,17 @@
 Kelli Johnson1, Xiangning Dong1, Yu-Hwai Tsai1, Angeline Wu1, Sydney G. Clark2, Rachel Zwick3, Ian Glass4, Katherine D. Walton1, Ophir Klein3, Jason R. Spence1,5-7
 
 1Department of Internal Medicine, Division of Gastroenterology, University of Michigan Medical School, Ann Arbor, MI 48109, USA
+
 2Department of Cellular and Molecular Biology, University of Michigan Medical School, Ann Arbor, MI 48109, USA 
+
 3Program in Craniofacial Biology and Department of Orofacial Sciences, University of California, San Francisco, San Francisco, California, USA.
+
 4Department of Pediatrics, Genetic Medicine, University of Washington, Seattle, WA 98195, USA 
+
 5Department of Cell and Developmental Biology, University of Michigan Medical School, Ann Arbor, MI 48109, USA
+
 6Department of Biomedical Engineering, University of Michigan and University of Michigan College of Engineering, Ann Arbor, MI, USA. 
+
 7Author for correspondence: spencejr@umich.edu.
 
 Keywords: development, mesenchyme, fibroblast, single-cell sequencing, spatial transcriptomics, Xenium, human, intestine
